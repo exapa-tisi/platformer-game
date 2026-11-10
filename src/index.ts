@@ -5,6 +5,7 @@ declare const p5: any;
 
 import Player from './world/entities/Player';
 import GameState from './GameState';
+import AssetLoader, { assetList, assets } from './util/AssetLoader';
 
 const VIRTUAL_WIDTH = 1920;
 const VIRTUAL_HEIGHT = 1080; 
@@ -24,12 +25,18 @@ const sketch = (p: typeof p5) => {
   
     let GameStateInstance: GameState;
 
-    p.setup = () => {
+    let grassImage: any;
+
+    p.setup = async () => {
         p.createCanvas(p.windowWidth, p.windowHeight);
         p.gameBuffer = p.createGraphics(p.windowWidth, p.windowHeight);
         p.calculateScale();
 
         GameStateInstance = new GameState(p);
+
+        await AssetLoader.loadAssets(p, assetList);
+
+        grassImage = assets['grass'];
     };
 
     p.draw = () => {

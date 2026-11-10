@@ -16,6 +16,9 @@ export default class Player {
     groundAmt: number = 0.3;
     airAmt: number = 0.1;
     groundFriction: number = 0.06;
+    overspeedGracePeriod: number = 0.2;
+    overspeedDecayRate: number = 8;
+    overspeedDuration: number = 0;
 
     dashState: boolean = false;
     canDash: boolean = true;
@@ -73,10 +76,23 @@ export default class Player {
             : this.p.keyIsDown(this.p.RIGHT_ARROW)
                 ? 1
                 : 0;
+        const deltaSeconds = this.p.deltaTime / 1000;
+
+        if (Math.abs(this.vel.x) > this.walkSpeed) {
+            this.overspeedDuration += deltaSeconds;
+        } else {
+            this.overspeedDuration = 0;
+        }
 
         if (horizontalInput !== 0) {
             const isOverspeedInInputDirection = this.vel.x * horizontalInput > this.walkSpeed;
-            if (!isOverspeedInInputDirection) {
+            if (isOverspeedInInputDirection) {
+                if (this.overspeedDuration > this.overspeedGracePeriod) {
+                    const excessSpeed = Math.abs(this.vel.x) - this.walkSpeed;
+                    const decay = Math.exp(-this.overspeedDecayRate * deltaSeconds);
+                    this.vel.x = horizontalInput * (this.walkSpeed + excessSpeed * decay);
+                }
+            } else {
                 this.vel.x = this.p.lerp(
                     this.vel.x,
                     horizontalInput * this.walkSpeed,

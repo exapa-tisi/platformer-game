@@ -27,6 +27,10 @@ module.exports = (env, argv) => {
           use: 'ts-loader',
           exclude: /node_modules/,
         },
+        {
+          test: /\.(png|svg|jpg|jpeg|gif)$/i,
+          type: 'asset/resource', // emits a separate file and exports the URL
+        },
       ],
     },
     plugins: [
