@@ -8,6 +8,7 @@ A large chunk of the code was written by an LLM unfortunately, I hate how easy c
 
 Inspirations:
 - Land of the Lustrous
+- Red Ball 4
 - Celeste
 - Geometry Dash platformer mode
 - Minecraft
