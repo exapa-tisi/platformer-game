@@ -1,19 +1,20 @@
 declare const p5: any;
 
 import {gravity} from '../WorldEnvronment';
-import {LEVELS, TILE_SIZE} from '../../Levels';
+import {getLevelSpawnPosition, LEVELS, TILE_SIZE} from '../../Levels';
 import {assets} from '../../util/AssetLoader';
 
 export default class Player {
     p: typeof p5;
     pos: any;
     vel: any;
+    isDead: boolean = false;
     touchingGround: boolean = false;
     jumpStrength: number = 15;
     coyoteTime: number = 0.1;
     private coyoteTimeRemaining: number = 0;
 
-    termVelocity: number = 10;
+    termVelocity: number = 30;
     walkSpeed: number = 10;
 
     currentAmt: number = 0;
@@ -44,13 +45,34 @@ export default class Player {
     }
 
     resetToSpawn(x: number, y: number) {
+        this.isDead = false;
         this.pos = this.p.createVector(x, y);
         this.vel = this.p.createVector(0, 0);
         this.touchingGround = false;
         this.coyoteTimeRemaining = 0;
     }
 
+    kill() {
+        if (this.isDead) {
+            return;
+        }
+
+        this.isDead = true;
+        this.vel.set(0, 0);
+        this.touchingGround = false;
+        this.coyoteTimeRemaining = 0;
+
+        setTimeout(() => {
+            const spawnPosition = getLevelSpawnPosition(0);
+            this.resetToSpawn(spawnPosition.x, spawnPosition.y);
+        }, 1000);
+    }
+
     update(levelIndex = 0) {
+        if (this.isDead) {
+            return;
+        }
+
         const deltaSeconds = this.p.deltaTime / 1000;
         if (this.touchingGround) {
             this.coyoteTimeRemaining = this.coyoteTime;
@@ -237,6 +259,10 @@ export default class Player {
     }
     
     draw(buffer : any) {
+        if (this.isDead) {
+            return;
+        }
+
         const playerImage = assets.player;
         if (!playerImage) {
             throw new Error('Player image has not been loaded.');

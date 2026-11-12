@@ -55,12 +55,39 @@ export default class Levels {
                 }
 
                 const tile = new DefaultBlock(p, x * tileSize, y * tileSize, tileSize);
-                const tileAbove = level[y - 1]?.[x] === 1;
-                const tileImage = tileAbove ? assets.grassFull : assets.grassTop;
-                if (tileImage) {
-                    this.levelImage.image(tileImage, tile.pos.x, tile.pos.y, tile.size, tile.size);
+                if (assets.grassFull) {
+                    this.levelImage.image(assets.grassFull, tile.pos.x, tile.pos.y, tile.size, tile.size);
                 } else {
                     tile.draw(this.levelImage);
+                }
+            }
+        }
+
+        for (let y = 0; y < level.length; y++) {
+            for (let x = 0; x < level[y].length; x++) {
+                if (level[y][x] !== 1) {
+                    continue;
+                }
+
+                const tileX = x * tileSize;
+                const tileY = y * tileSize;
+                if (level[y - 1]?.[x] !== 1 && assets.grassTop) {
+                    this.levelImage.image(assets.grassTop, tileX, tileY - tileSize, tileSize, tileSize);
+                }
+                if (level[y + 1]?.[x] !== 1 && assets.grassBottom) {
+                    this.levelImage.image(assets.grassBottom, tileX, tileY + tileSize, tileSize, tileSize);
+                }
+                //left tile
+                if (level[y]?.[x - 1] !== 1 && assets.grassSide) {
+                    this.levelImage.image(assets.grassSide, tileX - tileSize, tileY, tileSize, tileSize);
+                }
+                //right tile
+                if (level[y]?.[x + 1] !== 1 && assets.grassSide) {
+                    this.levelImage.push();
+                    this.levelImage.translate(tileX + tileSize * 2, tileY);
+                    this.levelImage.scale(-1, 1);
+                    this.levelImage.image(assets.grassSide, 0, 0, tileSize, tileSize);
+                    this.levelImage.pop();
                 }
             }
         }

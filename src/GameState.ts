@@ -4,6 +4,8 @@ import Player from './world/entities/Player';
 import Camera from './world/Camera';
 import Levels, { getLevelSpawnPosition, LEVELS, TILE_SIZE } from './Levels';
 import { assets } from './util/AssetLoader';
+import ParticleLeaf from './particles/ParticleLeaf';
+import ParticleMove from './particles/ParticleMove';
 
 type TreeShadingMode = 'background' | 'darken';
 
@@ -11,6 +13,9 @@ const TREE_SHADING_MODE: TreeShadingMode = 'darken';
 const TREE_BACKGROUND_COLOR = [255, 255, 120];
 const TREE_DARK_COLOR = [35, 35, 35];
 const TREE_SPACING = 1;
+const LEAF_PARTICLE_COUNT = 8;
+const VIRTUAL_WIDTH = 1920;
+const VIRTUAL_HEIGHT = 1080;
 
 type SavedState = {
     player: Record<string, unknown>;
@@ -34,6 +39,9 @@ export default class GameState {
     private camera: Camera;
     private currentLevel: Levels;
     private readonly treeLayers: Array<{ size: number; speed: number; phase: number; image: any }>;
+    private readonly leafParticles: ParticleLeaf[];
+    private readonly moveParticles: ParticleMove[] = [];
+    private moveParticleTimer = 0;
 
     constructor(p5Instance: typeof p5) {
         this.p = p5Instance;
@@ -41,6 +49,16 @@ export default class GameState {
         this.currentLevel = new Levels(this.p);
         const spawnPosition = getLevelSpawnPosition(this.currentLevel.levelIndex);
         this.class = { player: new Player(this.p, spawnPosition.x, spawnPosition.y) };
+        this.leafParticles = Array.from({ length: LEAF_PARTICLE_COUNT }, () => {
+            const size = this.p.random(22, 36);
+            return new ParticleLeaf(
+                this.p,
+                this.camera.pos.x + this.p.random(-VIRTUAL_WIDTH / 2, VIRTUAL_WIDTH / 2),
+                this.camera.pos.y - VIRTUAL_HEIGHT / 2 - this.p.random(0, VIRTUAL_HEIGHT * 0.12),
+                size,
+                this.p.color(255),
+            );
+        });
 
         const treeBackground = assets.treeBackground;
         this.treeLayers = treeBackground ? [
@@ -69,7 +87,120 @@ export default class GameState {
     }
 
     update() {
-        this.class.player.update(this.currentLevel.levelIndex);
+        const player = this.class.player;
+        const wasTouchingGround = player.touchingGround;
+        const level = LEVELS[this.currentLevel.levelIndex];
+        const takeoffColor = wasTouchingGround
+            ? this.getMovementParticleColor(level, player.pos.x + player.diameter / 2, player.pos.y + player.diameter + 1)
+            : null;
+        player.update(this.currentLevel.levelIndex);
+        for (const leaf of this.leafParticles) {
+            leaf.update();
+        }
+
+        for (const particle of this.moveParticles) {
+            particle.update(level);
+        }
+        for (let i = this.moveParticles.length - 1; i >= 0; i--) {
+            if (this.moveParticles[i].isDead()) {
+                this.moveParticles.splice(i, 1);
+            }
+        }
+
+        if (wasTouchingGround && !player.touchingGround && player.vel.y < 0 && takeoffColor) {
+            this.spawnMovementBurst(
+                takeoffColor,
+                player.pos.x + player.diameter / 2,
+                player.pos.y + player.diameter - 30,
+                9,
+                3,
+                5,
+            );
+        } else if (!wasTouchingGround && player.touchingGround) {
+            const landingColor = this.getMovementParticleColor(
+                level,
+                player.pos.x + player.diameter / 2,
+                player.pos.y + player.diameter + 1,
+            );
+            if (landingColor) {
+                this.spawnMovementBurst(
+                    landingColor,
+                    player.pos.x + player.diameter / 2,
+                    player.pos.y + player.diameter - 30,
+                    14,
+                    5,
+                    4,
+                );
+            }
+        }
+
+        if (player.touchingGround && Math.abs(player.vel.x) > 2) {
+            const color = this.getMovementParticleColor(
+                level,
+                player.pos.x + player.diameter / 2,
+                player.pos.y + player.diameter + 1,
+            );
+            if (color) {
+                this.moveParticleTimer += this.p.deltaTime / 1000;
+                if (this.moveParticleTimer >= 0.07) {
+                    const direction = Math.sign(player.vel.x);
+                    const spawnX = player.pos.x + (direction > 0 ? player.diameter * 0.3 : player.diameter * 0.7);
+                    this.moveParticles.push(new ParticleMove(
+                        this.p,
+                        spawnX,
+                        player.pos.y + player.diameter - 30,
+                        color,
+                        -direction * this.p.random(1.5, 4),
+                        this.p.random(-3.5, -1.5),
+                    ));
+                    this.moveParticleTimer = 0;
+                }
+            }
+        } else {
+            this.moveParticleTimer = 0;
+        }
+
+        if (player.pos.y >= level.length * TILE_SIZE) {
+            player.kill();
+        }
+    }
+
+    private getMovementParticleColor(level: number[][], worldX: number, worldY: number): number[] | null {
+        const tileX = Math.floor(worldX / TILE_SIZE);
+        const tileY = Math.floor(worldY / TILE_SIZE);
+        if (level[tileY]?.[tileX] !== 1) {
+            return null;
+        }
+
+        const tileImage = assets.grassFull;
+        if (!tileImage) {
+            throw new Error('Grass tile image has not been loaded.');
+        }
+
+        return tileImage.get(
+            Math.floor(tileImage.width / 2),
+            Math.floor(tileImage.height / 2),
+        );
+    }
+
+    private spawnMovementBurst(
+        color: number[],
+        x: number,
+        y: number,
+        count: number,
+        horizontalSpeed: number,
+        upwardSpeed: number,
+    ) {
+        for (let i = 0; i < count; i++) {
+            this.moveParticles.push(new ParticleMove(
+                this.p,
+                x + this.p.random(-12, 12),
+                y,
+                color,
+                this.p.random(-horizontalSpeed, horizontalSpeed),
+                this.p.random(-upwardSpeed, -upwardSpeed * 0.35),
+            ));
+        }
     }
 
     draw(buffer: any, viewportWidth: number, viewportHeight: number) {
@@ -96,12 +227,33 @@ export default class GameState {
             targetY = playerCenterY + viewportHeight / 2 - (viewportHeight - edgeMarginY);
         }
 
+        const level = LEVELS[this.currentLevel.levelIndex];
+        const mapWidth = Math.max(...level.map(row => row.length)) * TILE_SIZE;
+        const mapHeight = level.length * TILE_SIZE;
+        const halfViewportWidth = viewportWidth / 2;
+        const minCameraX = Math.min(halfViewportWidth, mapWidth / 2);
+        const maxCameraX = Math.max(mapWidth - halfViewportWidth, mapWidth / 2);
+        const maxCameraY = mapHeight - viewportHeight / 2;
+
+        targetX = this.p.constrain(targetX, minCameraX, maxCameraX);
+        targetY = Math.min(targetY, maxCameraY);
         this.camera.setTarget(targetX, targetY);
         //update the camera position
         this.camera.update(player.vel.x, player.vel.y);
+        this.camera.pos.x = this.p.constrain(this.camera.pos.x, minCameraX, maxCameraX);
+        this.camera.pos.y = Math.min(this.camera.pos.y, maxCameraY);
+
+        for (const leaf of this.leafParticles) {
+            if (leaf.hasFallen(VIRTUAL_HEIGHT + leaf.size)) {
+                leaf.reset(
+                    this.camera.pos.x + this.p.random(-viewportWidth / 2, viewportWidth / 2),
+                    this.camera.pos.y - viewportHeight / 2 - leaf.size,
+                    false,
+                );
+            }
+        }
 
         if (this.treeLayers.length > 0) {
-            const level = LEVELS[this.currentLevel.levelIndex];
             const groundY = buffer.height + (level.length - 1) * TILE_SIZE - this.camera.pos.y;
 
             for (const layer of this.treeLayers) {
@@ -117,15 +269,33 @@ export default class GameState {
 
         }
 
-        //translate the buffer to the camera position
+        buffer.push();
         buffer.translate(
             viewportWidth / 2 - this.camera.pos.x,
             viewportHeight / 2 - this.camera.pos.y,
         );
 
+        for (const leaf of this.leafParticles) {
+            if (!leaf.inFront) {
+                leaf.draw(buffer);
+            }
+        }
+
         this.currentLevel.draw(buffer);
+
+        for (const particle of this.moveParticles) {
+            particle.draw(buffer);
+        }
+
+        for (const leaf of this.leafParticles) {
+            if (leaf.inFront) {
+                leaf.draw(buffer);
+            }
+        }
+
         buffer.fill(255, 255, 255);
         this.class.player.draw(buffer);
+        buffer.pop();
     }
     
     save() {
@@ -162,6 +332,10 @@ export default class GameState {
             throw new Error('Saved game state has an invalid level index.');
         }
 
+        if (parsedState.levelIndex !== undefined) {
+            this.setLevel(parsedState.levelIndex);
+        }
+
         const player = this.class.player;
         for (const key of player.saveState) {
             if (!Object.prototype.hasOwnProperty.call(player, key)) {
@@ -188,9 +362,6 @@ export default class GameState {
             }
         }
 
-        if (parsedState.levelIndex !== undefined) {
-            this.setLevel(parsedState.levelIndex);
-        }
     }
 
     setLevel(levelIndex: number) {
