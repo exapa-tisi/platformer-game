@@ -1,19 +1,14 @@
 declare const p5: any;
 
 export default class Tile {
-    p: typeof p5;
-    pos: any;
-    size: number;
-    tileList: Array<Tile> = [];
+    private readonly p: typeof p5;
+    readonly pos: any;
+    readonly size: number;
 
     constructor(p: typeof p5, x: number, y: number, size: number) {
         this.p = p;
         this.pos = p.createVector(x, y);
         this.size = size;
-    }
-
-    registerTile(tile: Tile) {
-        this.tileList.push(tile);
     }
 
     draw(buffer: any) {

@@ -3,9 +3,8 @@
 // Tell TypeScript that 'p5' is globally available from our CDN script
 declare const p5: any;
 
-import Player from './world/entities/Player';
 import GameState from './GameState';
-import AssetLoader, { assetList, assets } from './util/AssetLoader';
+import AssetLoader, { assetList } from './util/AssetLoader';
 
 const VIRTUAL_WIDTH = 1920;
 const VIRTUAL_HEIGHT = 1080; 
@@ -21,32 +20,29 @@ let scaleFactor = 1;
 
 
 const sketch = (p: typeof p5) => {
-    let x = 100;
-  
     let GameStateInstance: GameState;
-
-    let grassImage: any;
 
     p.setup = async () => {
         p.createCanvas(p.windowWidth, p.windowHeight);
+        p.pixelDensity(1); // Disable high-DPI scaling for consistent pixel art rendering
+        p.frameRate(60); // Set the frame rate to 60 FPS
+        p.noSmooth();
         p.gameBuffer = p.createGraphics(p.windowWidth, p.windowHeight);
+        p.gameBuffer.noSmooth();
         p.calculateScale();
 
-        GameStateInstance = new GameState(p);
-
         await AssetLoader.loadAssets(p, assetList);
-
-        grassImage = assets['grass'];
+        GameStateInstance = new GameState(p);
     };
 
     p.draw = () => {
-        p.background(0); // Letterbox color
+        p.background(255, 255, 0); // Letterbox color
 
         var buffer = p.gameBuffer;
 
         // Clear the buffer each frame
         buffer.clear();
-        buffer.background(20); 
+        buffer.background(255, 255, 120); 
 
         // 3. Save state and apply the global scale matrix inside the buffer
         buffer.push();

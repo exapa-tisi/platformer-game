@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Platformer Level Editor</title>
+	<style>
+		:root { color-scheme: dark; --bg: #111827; --panel: #1f2937; --line: #374151; --text: #e5e7eb; --muted: #9ca3af; --accent: #38bdf8; }
+		* { box-sizing: border-box; }
+		body { margin: 0; min-height: 100vh; padding: 28px 18px; background: var(--bg); color: var(--text); font: 15px/1.45 system-ui, sans-serif; }
+		main { max-width: 1100px; margin: auto; }
+		h1 { margin: 0 0 4px; font-size: clamp(1.5rem, 3vw, 2rem); }
+		.intro, .hint { color: var(--muted); }
+		.intro { margin: 0 0 22px; }
+		.toolbar, .panel { padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+		.toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin-bottom: 14px; }
+		label { display: grid; gap: 5px; color: var(--muted); font-size: .85rem; }
+		input, select, textarea, button { font: inherit; }
+		input[type="number"], select { min-height: 38px; padding: 6px 9px; border: 1px solid #4b5563; border-radius: 6px; background: #111827; color: var(--text); }
+		input[type="number"] { width: 90px; }
+		button { min-height: 38px; padding: 7px 12px; border: 1px solid #4b5563; border-radius: 6px; background: #273449; color: var(--text); cursor: pointer; }
+		button:hover { border-color: var(--accent); }
+		button.primary { border-color: #0284c7; background: #0369a1; }
+		.tool-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+		.legend { margin: 0 0 12px; color: var(--muted); font-size: .9rem; }
+		.legend strong { color: var(--text); }
+		.grid-wrap { overflow: auto; max-height: 65vh; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background-color: #0b1220; }
+		#grid { display: grid; width: max-content; gap: 1px; background: #394456; border: 1px solid #394456; user-select: none; }
+		.cell { display: grid; place-items: center; width: 38px; height: 34px; padding: 0; border: 0; border-radius: 0; background: #172033; color: #cbd5e1; font: 12px ui-monospace, monospace; }
+		.cell:hover { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 1; }
+		.cell.filled { background: #155e75; color: white; font-weight: 700; }
+		.below { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+		.panel h2 { margin: 0 0 10px; font-size: 1rem; }
+		textarea { display: block; width: 100%; min-height: 175px; padding: 10px; resize: vertical; border: 1px solid #4b5563; border-radius: 6px; background: #111827; color: #d1d5db; font: 12px/1.5 ui-monospace, monospace; }
+		.panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+		#status { min-height: 1.4em; margin: 10px 0 0; color: #7dd3fc; }
+		.hint { margin: 10px 0 0; font-size: .85rem; }
+		@media (max-width: 700px) { .below { grid-template-columns: 1fr; } .tool-actions { margin-left: 0; } }
+	</style>
+</head>
+<body>
+	<main>
+		<h1>Platformer Level Editor</h1>
+		<p class="intro">Click or drag across the grid to paint tile numbers. Export a JSON level when you’re done.</p>
+
+		<section class="toolbar" aria-label="Editor controls">
+			<label>Rows <input id="rows" type="number" min="1" max="100" value="15"></label>
+			<label>Columns <input id="cols" type="number" min="1" max="150" value="25"></label>
+			<button id="resize">Resize grid</button>
+			<label>Selected tile <input id="tile" type="number" min="0" value="1"></label>
+			<div class="tool-actions">
+				<button id="erase">Erase (0)</button>
+				<button id="fill">Fill grid</button>
+				<button id="clear">Clear grid</button>
+			</div>
+		</section>
+
+		<p class="legend"><strong>Tile 0</strong> is empty. Choose any non-negative number for a tile; right-click a cell to erase it. Click-and-drag paints.</p>
+		<div class="grid-wrap"><div id="grid" role="grid" aria-label="Level tile grid"></div></div>
+
+		<div class="below">
+			<section class="panel">
+				<h2>Level JSON</h2>
+				<textarea id="json" spellcheck="false" aria-label="Level JSON" placeholder="Export a level here, or paste level JSON to import it."></textarea>
+				<div class="panel-actions">
+					<button class="primary" id="export">Export JSON</button>
+					<button id="copy">Copy JSON</button>
+					<button id="download">Download .json</button>
+					<button id="import">Import JSON</button>
+				</div>
+				<p id="status" role="status" aria-live="polite"></p>
+			</section>
+			<section class="panel">
+				<h2>Format</h2>
+				<p class="hint">The exported grid is a two-dimensional array of numbers, with row 0 at the top. Example:</p>
+				<textarea readonly aria-label="JSON format example">{
+	"width": 4,
+	"height": 3,
+	"tiles": [
+		[0, 0, 0, 0],
+		[0, 1, 1, 0],
+		[2, 2, 2, 2]
+	]
+}</textarea>
+				<p class="hint">Tile IDs are just numbers—the game decides what each number means.</p>
+			</section>
+		</div>
+	</main>
+
+	<!-- Useful next features: named tile palette with colors/icons, undo/redo, grid zoom, and object layers for enemies or collectibles. -->
+	<script>
+		const gridElement = document.querySelector('#grid');
+		const rowsInput = document.querySelector('#rows');
+		const colsInput = document.querySelector('#cols');
+		const tileInput = document.querySelector('#tile');
+		const jsonArea = document.querySelector('#json');
+		const status = document.querySelector('#status');
+		let rows = 15;
+		let cols = 25;
+		let tiles = Array.from({ length: rows }, () => Array(cols).fill(0));
+		let painting = false;
+
+		function currentTile() {
+			const value = Number.parseInt(tileInput.value, 10);
+			return Number.isFinite(value) && value >= 0 ? value : 0;
+		}
+
+		function render() {
+			gridElement.style.gridTemplateColumns = `repeat(${cols}, 38px)`;
+			const fragment = document.createDocumentFragment();
+			for (let r = 0; r < rows; r++) {
+				for (let c = 0; c < cols; c++) {
+					const cell = document.createElement('button');
+					cell.type = 'button';
+					cell.className = `cell${tiles[r][c] !== 0 ? ' filled' : ''}`;
+					cell.textContent = String(tiles[r][c]);
+					cell.setAttribute('role', 'gridcell');
+					cell.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}, tile ${tiles[r][c]}`);
+					cell.addEventListener('pointerdown', event => {
+						if (event.button === 2) return;
+						painting = true;
+						paint(r, c, currentTile());
+					});
+					cell.addEventListener('pointerenter', () => {
+						if (painting) paint(r, c, currentTile());
+					});
+					cell.addEventListener('contextmenu', event => {
+						event.preventDefault();
+						paint(r, c, 0);
+					});
+					fragment.appendChild(cell);
+				}
+			}
+			gridElement.replaceChildren(fragment);
+		}
+
+		function paint(r, c, value) {
+			if (tiles[r][c] === value) return;
+			tiles[r][c] = value;
+			const index = r * cols + c;
+			const cell = gridElement.children[index];
+			cell.textContent = String(value);
+			cell.classList.toggle('filled', value !== 0);
+			cell.setAttribute('aria-label', `Row ${r + 1}, column ${c + 1}, tile ${value}`);
+		}
+
+		function makeLevel() {
+			return { width: cols, height: rows, tiles };
+		}
+
+		function exportJSON() {
+			jsonArea.value = JSON.stringify(makeLevel(), null, 2);
+			status.textContent = 'JSON exported to the text box.';
+		}
+
+		document.addEventListener('pointerup', () => { painting = false; });
+		document.addEventListener('pointercancel', () => { painting = false; });
+		document.querySelector('#resize').addEventListener('click', () => {
+			const nextRows = Math.max(1, Math.min(100, Number.parseInt(rowsInput.value, 10) || 1));
+			const nextCols = Math.max(1, Math.min(150, Number.parseInt(colsInput.value, 10) || 1));
+			tiles = Array.from({ length: nextRows }, (_, r) =>
+				Array.from({ length: nextCols }, (_, c) => tiles[r]?.[c] ?? 0));
+			rows = nextRows;
+			cols = nextCols;
+			rowsInput.value = rows;
+			colsInput.value = cols;
+			render();
+			status.textContent = `Grid resized to ${cols} × ${rows}.`;
+		});
+		document.querySelector('#erase').addEventListener('click', () => {
+			tileInput.value = 0;
+			status.textContent = 'Selected tile set to 0 (erase).';
+		});
+		document.querySelector('#fill').addEventListener('click', () => {
+			tiles = Array.from({ length: rows }, () => Array(cols).fill(currentTile()));
+			render();
+			status.textContent = `Filled grid with tile ${currentTile()}.`;
+		});
+		document.querySelector('#clear').addEventListener('click', () => {
+			tiles = Array.from({ length: rows }, () => Array(cols).fill(0));
+			render();
+			status.textContent = 'Grid cleared.';
+		});
+		document.querySelector('#export').addEventListener('click', exportJSON);
+		document.querySelector('#copy').addEventListener('click', async () => {
+			if (!jsonArea.value.trim()) exportJSON();
+			try {
+				await navigator.clipboard.writeText(jsonArea.value);
+				status.textContent = 'JSON copied to clipboard.';
+			} catch {
+				jsonArea.focus();
+				jsonArea.select();
+				status.textContent = 'Clipboard unavailable—press Ctrl/Cmd+C to copy the selected JSON.';
+			}
+		});
+		document.querySelector('#download').addEventListener('click', () => {
+			if (!jsonArea.value.trim()) exportJSON();
+			const blob = new Blob([jsonArea.value], { type: 'application/json' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = 'level.json';
+			link.click();
+			URL.revokeObjectURL(url);
+			status.textContent = 'Downloaded level.json.';
+		});
+		document.querySelector('#import').addEventListener('click', () => {
+			try {
+				const level = JSON.parse(jsonArea.value);
+				const imported = level.tiles;
+				if (!Array.isArray(imported) || imported.length < 1 || imported.length > 100 ||
+						!imported.every(row => Array.isArray(row) && row.length === imported[0].length && row.length > 0 && row.length <= 150 &&
+							row.every(value => Number.isInteger(value) && value >= 0))) {
+					throw new Error('Expected a rectangular tiles array of non-negative integers (max 100 × 150).');
+				}
+				rows = imported.length;
+				cols = imported[0].length;
+				tiles = imported.map(row => [...row]);
+				rowsInput.value = rows;
+				colsInput.value = cols;
+				render();
+				status.textContent = `Imported ${cols} × ${rows} level.`;
+			} catch (error) {
+				status.textContent = `Import failed: ${error.message}`;
+			}
+		});
+
+		render();
+	</script>
+</body>
+</html>
